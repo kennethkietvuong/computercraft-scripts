@@ -3,7 +3,7 @@
 	by Juicebox829
 	
 	June 20th, 2024
-	Update: Jun 18th, 2024
+	Update: Jun 22th, 2024
 
 	States of airlock: (initial) enter airlock -> seal -> rocket room
                        rocket room -> seal -> enter airlock
@@ -12,16 +12,17 @@
 ]]--
 
 function main()
-	local state = 0
+	state = 0
     term.clear()
 	term.setCursorPos(1,1)
 
-	powerSide = 'back'
-	monSide = 'top'
+	monSide = 'back'
 	speakSide = 'bottom'
 
     mon = peripheral.wrap(monSide)
     speak = peripheral.wrap(speakSide)
+
+    mon.setBackgroundColor(colors.black)
 
 	-- first check if the term.isColor function exists
 	if not mon.isColor then
@@ -33,18 +34,29 @@ function main()
 		exit()
 	end
 
+    engageSealDisplay()
+
+    print("Airlock is now Active!")
     -- Airlock state machine
     while true do
-        -- Initial state
-        if state == 0 then
-            touchMonitor()
-            enterAirlockDisplay()
+        
         -- Closing/sealing airlock
-        elseif state == 1 then
-            sealAirlock()
-        -- Opening airlock
+        if state == 1 then
+            parallel.waitForAll(sealAirlock, sealAirlockDisplay)
+            state = 2
+            
+        -- Opening an airlock door
         elseif state == 2 then
+            openAirlockDisplay()
+            touchMonitor()
+            openAirlock(readTouchInput())
+            state = 0
 
+        -- Initial state
+        else
+            engageSealDisplay()
+            touchMonitor()
+            state = readTouchInput()
         end
     end
 
@@ -67,30 +79,139 @@ function sealAirlock()
 
     -- Make "pressure" sound
     for i = 0, 4, 1 do
-        speak.playSound("minecraft:block.lava_extinguish", 1, 0.5)
+        speak.playSound("minecraft:block.lava.extinguish", 1, 0.5)
         sleep(1)
     end
     
     -- Disable oxygen distributor
     redstone.setOutput("top", false)
-
+    
     -- Make "completion" sound
-    --speak.playNote()
+    local function completionSound()
+        speak.playNote("bit", 1, 10)
+        sleep(0.3)
+        speak.playNote("bit", 1, 10)
+        sleep(0.3)
+        speak.playNote("bit", 1, 10)
+    end
+
+    parallel.waitForAll(completionSound, sealSuccessDisplay)
+end
+
+--[[
+	Changes the monitor's display to show that the airlock is being sealed
+]]--
+function sealAirlockDisplay()
+        mon.clear()
+        mon.setTextScale(0.5)
+        mon.setTextColor(colors.yellow)
+        mon.setBackgroundColor(colors.yellow)
+        
+        -- Yellow Exclamation Mark
+        mon.setCursorPos(8, 2) mon.write(" ")
+        mon.setCursorPos(8, 3) mon.write(" ")
+        mon.setCursorPos(8, 4) mon.write(" ")
+        mon.setCursorPos(8, 6) mon.write(" ")
+        
+        -- Yellow "Sealing..." Text
+        mon.setCursorPos(4, 8)
+        mon.setBackgroundColor(colors.black)
+        mon.write("Sealing...")
+
+        -- White Countdown
+        mon.setTextColor(colors.white)
+        countDown(10)
 end
 
 --[[
     Changes the monitor's display to show a button to seal the
     airlock.
 ]]--
-function enterAirlockDisplay()
+function engageSealDisplay()
+	mon.clear()
+	mon.setTextScale(0.5)
+	mon.setTextColor(colors.white)
+	mon.setBackgroundColor(colors.red)
 
+	-- "ENGAGE SEAL" Button
+	mon.setCursorPos(3, 4) mon.write("           ")
+	mon.setCursorPos(3, 5) mon.write("  ENGAGE   ")
+	mon.setCursorPos(3, 6) mon.write("  SEAL     ")
+	mon.setCursorPos(3, 7) mon.write("           ")
+
+    mon.setBackgroundColor(colors.black)
 end
 
 --[[
-    Choose one of the doors to open
+	Changes the monitor's display to show that sealing the airlock has been
+    successful
 ]]--
-function openAirlock()
-    
+function sealSuccessDisplay()
+	mon.clear()
+	mon.setTextScale(0.5)
+	mon.setTextColor(colors.green)
+	mon.setBackgroundColor(colors.green)
+
+	-- Green Checkmark
+	mon.setCursorPos(5, 4) mon.write(" ")
+	mon.setCursorPos(6, 5) mon.write(" ")
+	mon.setCursorPos(7, 6) mon.write(" ")
+	mon.setCursorPos(8, 5) mon.write(" ")
+	mon.setCursorPos(9, 4) mon.write(" ")
+	mon.setCursorPos(10, 3) mon.write(" ")
+	mon.setCursorPos(11, 2) mon.write(" ")
+
+	-- Green "SUCCESS" Text
+	mon.setCursorPos(5, 8) 
+	mon.setBackgroundColor(colors.black)
+	mon.write("SUCCESS")
+
+	-- White Countdown
+	mon.setTextColor(colors.white) 
+	mon.setCursorPos(8, 10)
+	countDown(3)
+end
+
+
+--[[
+    Opens one of the doors
+
+    @param door - An integer value of 2 (left), 3 (right), or 4 (both)
+]]--
+function openAirlock(door)
+    -- Left door
+    if door == 2 then
+        redstone.setOutput("right", true)
+    -- Right door
+    elseif door == 3 then
+        redstone.setOutput("left", true)
+    -- Both doors
+    elseif door == 4 then
+        redstone.setOutput("left", true)
+        redstone.setOutput("right", true)
+    end
+end
+
+--[[
+    Changes the monitor's display to show two buttons to open an airlock door
+]]--
+function openAirlockDisplay()
+	mon.clear()
+	mon.setTextScale(1)
+	mon.setBackgroundColor(colors.white)
+
+	-- Left/Right Door Buttons
+	mon.setCursorPos(4, 1) mon.write(" ")
+    mon.setCursorPos(4, 2) mon.write(" ")
+    mon.setCursorPos(1, 3)
+    mon.setBackgroundColor(colors.black) mon.write("<--")
+    mon.setBackgroundColor(colors.white) mon.write(" ")
+    mon.setBackgroundColor(colors.black) mon.write("-->")
+    mon.setBackgroundColor(colors.white)
+    mon.setCursorPos(4, 4) mon.write(" ")
+    mon.setCursorPos(4, 5) mon.write(" ")
+
+    mon.setBackgroundColor(colors.black)
 end
 
 --[[
@@ -98,7 +219,29 @@ end
     screen
 ]]--
 function touchMonitor()
-    local event, side, x, y = os.pullEvent("monitor_touch")
+    event, side, x, y = os.pullEvent("monitor_touch")
+end
+
+--[[
+    Button functionality when button is pressed on the monitor
+]]--
+function readTouchInput()
+    -- State 0 button
+    if x >= 3 and x <= 13 and y >= 4 and y <= 7 and state == 0 then
+        return 1
+    -- State 2 left door button
+    elseif x >= 1 and x < 4 and state == 2 then
+        return 2
+    -- State 2 right door button
+    elseif x > 4 and x <= 7 and state == 2 then
+        return 3
+    -- State 2 both doors
+    elseif x == 4 and state == 2 then
+        return 4
+    -- Invalid button press
+    else
+        return -1
+    end
 end
 
 --[[
@@ -128,3 +271,5 @@ function countDown(number)
 		sleep(1)
 	end
 end
+
+main()
